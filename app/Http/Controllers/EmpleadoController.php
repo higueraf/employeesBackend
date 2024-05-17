@@ -12,19 +12,17 @@ class EmpleadoController extends Controller
     public function index(Request $request)
     {
         
-        try {
-            
-        
+        try {        
             $numPerPage = $request->input('NumRecordsPage', 115);
             $order = $request->input('Order', 'id');
+            $allRegisters = $request->input('AllRegisters', false);
             $sort = $request->input('Sort', 'asc');
             $numFilter = $request->input('NumFilter');
             $textFilter = $request->input('TextFilter');
-            $numPage = $request->input('NumPage');
-    
-            $query = Empleado::with('provincia');
-           
-    
+            $nombreFilter = $request->input('NombreFilter');
+            $codigoFilter = $request->input('CodigoFilter');
+            $numPage = $request->input('NumPage');    
+            $query = Empleado::with('provincia')->with('provinciaCargo');
             if ($numFilter && $textFilter) {
                 switch ($numFilter) {
                     case 1:
@@ -38,16 +36,32 @@ class EmpleadoController extends Controller
                         break;
                 }
             }
+            if ($nombreFilter && $codigoFilter) {
+                $query->where(function ($query) use ($nombreFilter) {
+                    $query->where('nombres', 'like', '%' . $nombreFilter . '%')
+                          ->orWhere('apellidos', 'like', '%' . $nombreFilter . '%');
+                });
+                $query->where('codigo', 'like', '%' . $codigoFilter . '%');
+            } elseif ($nombreFilter) {
+                $query->where(function ($query) use ($nombreFilter) {
+                    $query->where('nombres', 'like', '%' . $nombreFilter . '%')
+                          ->orWhere('apellidos', 'like', '%' . $nombreFilter . '%');
+                });
+            } elseif ($codigoFilter) {
+                $query->where('codigo', 'like', '%' . $codigoFilter . '%');
+            }
+            
             $totalRecords = $query->count();
-            $totalPages = ceil($totalRecords / $numPerPage); // Calcular total de páginas
-            
+            $totalPages = ceil($totalRecords / $numPerPage);
             $query->orderBy($sort, $order);
-            
-            //$empleados = $query->paginate($numPerPage);
-            $empleados = $query->paginate($numPerPage, ['*'], 'page', $numPage);
+            if (!$allRegisters){
+                $empleados = $query->paginate($numPerPage, ['*'], 'page', $numPage);
+            } else {
+                $empleados = $query->get();
+            }
             return response()->json([
                 'status' => true,
-                'message' => 'Empleados retrieved successfully',
+                'message' => 'Employees retrieved successfully',
                 'data' => $empleados
             ], 200);
         } catch (Exception $ex) {
@@ -61,11 +75,10 @@ class EmpleadoController extends Controller
     
     public function show($id)
     {
-        echo "show";
         $Empleado = Empleado::findOrFail($id);
         return response()->json([
             'status' => true,
-            'message' => 'Empleado found successfully',
+            'message' => 'Employee found successfully',
             'data' => $Empleado
         ], 200);
     }
@@ -75,7 +88,6 @@ class EmpleadoController extends Controller
         $validator = Validator::make($request->all(), [
             'nombres' => 'required|string|max:255',
             'apellidos' => 'required|string|max:255',
-            'foto' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
         if ($validator->fails()) {
             return response()->json([
@@ -84,58 +96,55 @@ class EmpleadoController extends Controller
                 'errors' => $validator->errors()
             ], 422);
         }
-        if ($request->hasFile('foto')) {
+        if ($request->hasFile('foto') && $request->file('foto')->isValid()) {
             $foto = $request->file('foto');
             $nombreArchivo = $foto->getClientOriginalName();
-            $foto->move(public_path('empleados'), $nombreArchivo);
+            $empleado->foto = 'http://localhost:8000/empleados/'+$nombreArchivo;
         }
         $empleado = Empleado::create($request->all());
         return response()->json([
             'status' => true,
-            'message' => 'Empleado creado exitosamente',
+            'message' => 'Employee created successfully',
             'data' => $empleado
         ], 201);
     }
     public function update(Request $request, $id)
-{
-    $empleado = Empleado::find($id);
+    {
+        
+        $empleado = Empleado::findOrFail($id);
+        if (!$empleado) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Employee not found',
+            ], 404);
+        }
+        $validator = Validator::make($request->all(), [
+            'nombres' => 'required|string|max:255',
+            'apellidos' => 'required|string|max:255',
+        ]);
 
-    if (!$empleado) {
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Validation error',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+        if ($request->hasFile('foto') && $request->file('foto')->isValid()) {
+            $foto = $request->file('foto');
+            $nombreArchivo = $foto->getClientOriginalName();
+            $foto->move(public_path('empleados'), $nombreArchivo);
+            $empleado->foto = 'http://localhost:8000/empleados/'+$nombreArchivo;
+        }
+
+        $empleado->update($request->all());
+
         return response()->json([
-            'status' => false,
-            'message' => 'Empleado no encontrado',
-        ], 404);
+            'status' => true,
+            'message' => 'Employee updated successfully',
+            'data' => $empleado
+        ], 200);
     }
-
-    $validator = Validator::make($request->all(), [
-        'nombres' => 'required|string|max:255',
-        'apellidos' => 'required|string|max:255',
-        'foto' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
-    ]);
-
-    if ($validator->fails()) {
-        return response()->json([
-            'status' => false,
-            'message' => 'Error de validación',
-            'errors' => $validator->errors()
-        ], 422);
-    }
-
-    if ($request->hasFile('foto')) {
-        $foto = $request->file('foto');
-        $nombreArchivo = $foto->getClientOriginalName();
-        $foto->move(public_path('empleados'), $nombreArchivo);
-        $empleado->foto = $nombreArchivo;
-    }
-
-    $empleado->update($request->all());
-
-    return response()->json([
-        'status' => true,
-        'message' => 'Empleado actualizado exitosamente',
-        'data' => $empleado
-    ], 200);
-}
 
 
     public function destroy($id)
@@ -145,7 +154,7 @@ class EmpleadoController extends Controller
         
         return response()->json([
             'status' => true,
-            'message' => 'Empleado deleted successfully'
+            'message' => 'Employee deleted successfully'
         ], 204);
     }
 }

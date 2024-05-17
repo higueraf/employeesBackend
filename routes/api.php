@@ -36,7 +36,7 @@ Route::group([
 Route::post('/empleados/list', [EmpleadoController::class, 'index']);
 Route::get('/empleado/{id}', [EmpleadoController::class, 'show']);
 Route::post('/empleados/create', [EmpleadoController::class, 'store']);
-Route::put('/empleados/update/{id}', [EmpleadoController::class, 'update']);
+Route::post('/empleados/update/{id}', [EmpleadoController::class, 'update']);
 Route::delete('/empleados/{id}', [EmpleadoController::class, 'destroy']);
 
 Route::get('/provincias/select', [ProvinciaController::class, 'index']);
